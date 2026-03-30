@@ -1,4 +1,6 @@
 from pathlib import Path
+import time
+
 import torch
 from torch import optim
 import torch.nn as nn
@@ -60,17 +62,17 @@ class CyrillicCNN(nn.Module):
     self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1)
     self.bn1 = nn.BatchNorm2d(32)
     self.relu1 = nn.ReLU()
-    self.pool1 = nn.MaxPool2d(2, 2) 
+    self.pool1 = nn.MaxPool2d(2, 2) # 64 -> 32
     
     self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
     self.bn2 = nn.BatchNorm2d(64)
     self.relu2 = nn.ReLU()
-    self.pool2 = nn.MaxPool2d(2, 2) 
+    self.pool2 = nn.MaxPool2d(2, 2) # 32 -> 16
 
     self.conv3 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
     self.bn3 = nn.BatchNorm2d(128)
     self.relu3 = nn.ReLU()
-    self.pool3 = nn.MaxPool2d(2, 2) 
+    self.pool3 = nn.MaxPool2d(2, 2) # 16 -> 8
     
     self.flatten = nn.Flatten()
     self.fc1 = nn.Linear(128 * 8 * 8, 256)
@@ -122,15 +124,18 @@ if __name__ == '__main__':
 
   test_dataset = CyrillicMNISTDataset(data_path, is_train=False)
   test_dataset.samples = test_samples
+
+  # batch_size = 64
   batch_size = 256
   train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True, persistent_workers=True)
   test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, persistent_workers=True)
 
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+ 
   model = CyrillicCNN().to(device)
 
   num_epochs = 100
+  patience = 4
 
   train_loss = []
   train_acc = []
@@ -147,6 +152,7 @@ if __name__ == '__main__':
 
   if not model_path.exists():
     for epoch in range(num_epochs):
+      start = time.time()
       model.train()
       run_loss = 0.0
       total = 0
@@ -197,8 +203,16 @@ if __name__ == '__main__':
         best_val_loss = val_epoch_loss
         epochs_no_imporve = 0       
         torch.save(model.state_dict(), model_path)
+      else:
+        epochs_no_imporve += 1
+        if epochs_no_imporve >= patience:
+          print("Early stopping triggered")
+          break
         
       print(f"Epoch {epoch}: Train Loss {epoch_loss:.3f}, Train Acc {epoch_acc:.2f}%\nVal Loss {val_epoch_loss:.3f}, Val Acc {val_epoch_acc:.2f}%")
+
+      end = time.time()
+      print(f'time={end - start:.2f}')
 
     plt.figure()
     plt.subplot(121)
@@ -216,5 +230,7 @@ if __name__ == '__main__':
     plt.savefig(save_path / 'train.png')
     plt.show()
 
+    del train_loader
+    del test_loader
   else:
     model.load_state_dict(torch.load(model_path))
