@@ -25,15 +25,18 @@ class CyrillicMNISTDataset(Dataset):
       for image_path in sorted(cls.glob('*.png')):
         self.samples.append((image_path, ncls))
 
+  
     train_transforms = transforms.Compose([
       transforms.Resize((64, 64), interpolation=transforms.InterpolationMode.BILINEAR),
       transforms.RandomAffine(
-         degrees=(-10, 10),
-         translate=(0.05, 0.05),
-         scale=(0.9, 1.1)
+         degrees=(-15, 15),  
+         translate=(0.1, 0.1), 
+         scale=(0.85, 1.15) 
       ),
+      transforms.RandomRotation(5),  
       transforms.ToTensor(),
     ])
+    
     
     test_transforms = transforms.Compose([
       transforms.Resize((64, 64), interpolation=transforms.InterpolationMode.BILINEAR),
@@ -59,27 +62,54 @@ class CyrillicCNN(nn.Module):
   def __init__(self):
     super(CyrillicCNN, self).__init__()
     
-    self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1)
-    self.bn1 = nn.BatchNorm2d(32)
-    self.relu1 = nn.ReLU()
-    self.pool1 = nn.MaxPool2d(2, 2) # 64 -> 32
+   
+    self.conv1 = nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3, padding=1)
+    self.bn1 = nn.BatchNorm2d(64)
+    self.relu1 = nn.ReLU(inplace=True) 
+    self.pool1 = nn.MaxPool2d(2, 2) 
     
-    self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
-    self.bn2 = nn.BatchNorm2d(64)
-    self.relu2 = nn.ReLU()
-    self.pool2 = nn.MaxPool2d(2, 2) # 32 -> 16
+    self.conv2 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
+    self.bn2 = nn.BatchNorm2d(128)
+    self.relu2 = nn.ReLU(inplace=True)
+    self.pool2 = nn.MaxPool2d(2, 2) 
 
-    self.conv3 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, padding=1)
-    self.bn3 = nn.BatchNorm2d(128)
-    self.relu3 = nn.ReLU()
-    self.pool3 = nn.MaxPool2d(2, 2) # 16 -> 8
+    self.conv3 = nn.Conv2d(in_channels=128, out_channels=256, kernel_size=3, padding=1)
+    self.bn3 = nn.BatchNorm2d(256)
+    self.relu3 = nn.ReLU(inplace=True)
+    self.pool3 = nn.MaxPool2d(2, 2)
     
+    
+    self.conv4 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=3, padding=1)
+    self.bn4 = nn.BatchNorm2d(256)
+    self.relu4 = nn.ReLU(inplace=True)
+    self.pool4 = nn.MaxPool2d(2, 2)
+    
+   
     self.flatten = nn.Flatten()
-    self.fc1 = nn.Linear(128 * 8 * 8, 256)
-    self.relu4 = nn.ReLU()
-    self.dropout = nn.Dropout(0.5)
-    self.fc2 = nn.Linear(256, 34)
+    self.fc1 = nn.Linear(256 * 4 * 4, 512)  
+    self.relu5 = nn.ReLU(inplace=True)
+    self.dropout1 = nn.Dropout(0.4)  
+    self.fc2 = nn.Linear(512, 256)
+    self.relu6 = nn.ReLU(inplace=True)
+    self.dropout2 = nn.Dropout(0.3)
+    self.fc3 = nn.Linear(256, 34)
     
+  
+    self._initialize_weights()
+    
+  def _initialize_weights(self):
+    for m in self.modules():
+      if isinstance(m, nn.Conv2d):
+        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        if m.bias is not None:
+          nn.init.constant_(m.bias, 0)
+      elif isinstance(m, nn.BatchNorm2d):
+        nn.init.constant_(m.weight, 1)
+        nn.init.constant_(m.bias, 0)
+      elif isinstance(m, nn.Linear):
+        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        nn.init.constant_(m.bias, 0)
+  
   def forward(self, x):
     x = self.conv1(x)
     x = self.bn1(x)
@@ -96,11 +126,19 @@ class CyrillicCNN(nn.Module):
     x = self.relu3(x)
     x = self.pool3(x)
     
+    x = self.conv4(x)
+    x = self.bn4(x)
+    x = self.relu4(x)
+    x = self.pool4(x)
+    
     x = self.flatten(x)
     x = self.fc1(x)
-    x = self.relu4(x)
-    x = self.dropout(x)
+    x = self.relu5(x)
+    x = self.dropout1(x)
     x = self.fc2(x)
+    x = self.relu6(x)
+    x = self.dropout2(x)
+    x = self.fc3(x)
     
     return x
 
@@ -125,17 +163,24 @@ if __name__ == '__main__':
   test_dataset = CyrillicMNISTDataset(data_path, is_train=False)
   test_dataset.samples = test_samples
 
-  # batch_size = 64
+  
   batch_size = 256
   train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True, persistent_workers=True)
   test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, persistent_workers=True)
 
   device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  print(f"Using device: {device}")
  
   model = CyrillicCNN().to(device)
+  
+ 
+  total_params = sum(p.numel() for p in model.parameters())
+  trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+  print(f"Total parameters: {total_params:,}")
+  print(f"Trainable parameters: {trainable_params:,}")
 
   num_epochs = 100
-  patience = 4
+  patience = 6  
 
   train_loss = []
   train_acc = []
@@ -146,8 +191,10 @@ if __name__ == '__main__':
   epochs_no_imporve = 0
 
   criterion = nn.CrossEntropyLoss()
-  optimizer = optim.Adam(model.parameters(), lr=0.001)
-  scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3, factor=0.1)
+ 
+  optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
+
+  scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=3, factor=0.5)
 
 
   if not model_path.exists():
@@ -165,6 +212,10 @@ if __name__ == '__main__':
         
         loss = criterion(outputs, labels)
         loss.backward()
+        
+        # Gradient clipping для стабильности
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
         optimizer.step()
         run_loss += loss.item()
         
@@ -199,38 +250,62 @@ if __name__ == '__main__':
       test_loss.append(val_epoch_loss)
       test_acc.append(val_epoch_acc)
 
+     
+      current_lr = optimizer.param_groups[0]['lr']
+      
       if val_epoch_loss < best_val_loss:
         best_val_loss = val_epoch_loss
         epochs_no_imporve = 0       
-        torch.save(model.state_dict(), model_path)
+        torch.save({
+          'epoch': epoch,
+          'model_state_dict': model.state_dict(),
+          'optimizer_state_dict': optimizer.state_dict(),
+          'val_loss': val_epoch_loss,
+          'val_acc': val_epoch_acc,
+        }, model_path)
+        print(f"Model saved with val_loss: {val_epoch_loss:.3f}, val_acc: {val_epoch_acc:.2f}%")
       else:
         epochs_no_imporve += 1
         if epochs_no_imporve >= patience:
-          print("Early stopping triggered")
+          print(f"Early stopping triggered after {epoch} epochs")
           break
         
-      print(f"Epoch {epoch}: Train Loss {epoch_loss:.3f}, Train Acc {epoch_acc:.2f}%\nVal Loss {val_epoch_loss:.3f}, Val Acc {val_epoch_acc:.2f}%")
+      print(f"Epoch {epoch}: Train Loss {epoch_loss:.3f}, Train Acc {epoch_acc:.2f}%")
+      print(f"          Val Loss {val_epoch_loss:.3f}, Val Acc {val_epoch_acc:.2f}%")
+      print(f"          LR: {current_lr:.6f}")
 
       end = time.time()
-      print(f'time={end - start:.2f}')
+      print(f'time={end - start:.2f}s\n')
 
-    plt.figure()
+    plt.figure(figsize=(12, 4))
     plt.subplot(121)
     plt.title("Loss")
     plt.plot(train_loss, label='Train loss')
-    plt.plot(test_loss, label='test loss')
+    plt.plot(test_loss, label='Test loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
     plt.legend()
+    plt.grid(True)
 
     plt.subplot(122)
-    plt.title("Acc")
+    plt.title("Accuracy")
     plt.plot(train_acc, label='Train acc')
     plt.plot(test_acc, label='Test acc')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy (%)')
     plt.legend()
+    plt.grid(True)
 
+    plt.tight_layout()
     plt.savefig(save_path / 'train.png')
     plt.show()
+
+    print(f"Best validation loss: {best_val_loss:.3f}")
+    print(f"Best validation accuracy: {max(test_acc):.2f}%")
 
     del train_loader
     del test_loader
   else:
-    model.load_state_dict(torch.load(model_path))
+    checkpoint = torch.load(model_path)
+    model.load_state_dict(checkpoint['model_state_dict'])
+    print(f"Model loaded from epoch {checkpoint['epoch']} with val_loss: {checkpoint['val_loss']:.3f}, val_acc: {checkpoint['val_acc']:.2f}%")
