@@ -42,7 +42,7 @@ def build_model():
     return model
 
 model = build_model()
-print(model)
+
 
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(
@@ -64,7 +64,7 @@ def train(buffer):
     model.train()
     images, labels = buffer.get_batch()
     optimizer.zero_grad()
-    predictions = model(images).squeeze(1)
+    predictions = model(images).squeeze(-1)
     loss = criterion(predictions, labels)
     loss.backward()
     optimizer.step()
@@ -75,7 +75,7 @@ def predict(frame):
     tensor = transform(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     tensor = tensor.unsqueeze(0)
     with torch.no_grad():
-        predicted = model(tensor).squeeze()
+        predicted = model(tensor).squeeze(-1)
         prob = torch.sigmoid(predicted).item()
     label = "person" if prob > 0.5 else "no person"
     return label, prob
