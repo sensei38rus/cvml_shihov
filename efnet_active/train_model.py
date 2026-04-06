@@ -10,7 +10,7 @@ import time
 from collections import deque
 
 save_path = Path(__file__).parent
-model_path = save_path/"efficientnet_b0.pth"
+model_path = save_path/"model.pth"
 
 def build_model():
     # Загружаем предобученную EfficientNet-B0
@@ -26,14 +26,9 @@ def build_model():
     in_features = model.classifier[1].in_features
     
     # Заменяем последний слой на бинарную классификацию
-    model.classifier[1] = nn.Sequential(
-        nn.Dropout(p=0.2, inplace=True),
-        nn.Linear(in_features, 1)
-    )
+    model.classifier[1] = torch.nn.Linear(in_features, 1)
     
     # Размораживаем только новый слой
-    for param in model.classifier[1].parameters():
-        param.requires_grad = True
     
     if model_path.exists():
         model.load_state_dict(torch.load(model_path))
@@ -133,7 +128,7 @@ while True:
         print(f"Время инференса: {inference_time:.3f}с")
         print(f"Предсказание: {label} (уверенность: {confidence:.3f})")
     elif key == ord("s"):  # save model
-        torch.save(model.state_dict(), save_path / "efficientnet_b0.pth")
+        torch.save(model.state_dict(), save_path / "model.pth")
         print("Модель сохранена")
 
     if count_labeled >= buffer.frames.maxlen:
