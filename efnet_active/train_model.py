@@ -64,12 +64,15 @@ def train(buffer):
         return None
     model.train()
     images, labels = buffer.get_batch()
-    optimizer.zero_grad()
-    predictions = model(images).squeeze(1)
-    loss = criterion(predictions, labels)
-    loss.backward()
-    optimizer.step()
-    return loss.item()
+    final_loss = 0
+    for _ in range(5):
+        optimizer.zero_grad()
+        predictions = model(images).squeeze()
+        loss = criterion(predictions, labels)
+        loss.backward()
+        optimizer.step()
+        final_loss = loss.item()
+    return final_loss
 
 def predict(frame):
     model.eval()
