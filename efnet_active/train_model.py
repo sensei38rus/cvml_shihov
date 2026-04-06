@@ -26,7 +26,13 @@ def build_model():
     in_features = model.classifier[1].in_features
     
     # Заменяем последний слой на бинарную классификацию
-    model.classifier[1] = torch.nn.Linear(in_features, 1)
+    model.classifier = nn.Sequential(
+      nn.Linear(in_features, 128),
+      nn.ReLU(),
+      nn.Linear(128, 1)
+  )
+    for param in model.features.parameters():
+        param.requires_grad = False
     
     # Размораживаем только новый слой
     
@@ -59,7 +65,7 @@ def train(buffer):
     model.train()
     images, labels = buffer.get_batch()
     optimizer.zero_grad()
-    predictions = model(images).squeeze(-1)
+    predictions = model(images).squeeze(1)
     loss = criterion(predictions, labels)
     loss.backward()
     optimizer.step()
@@ -70,7 +76,7 @@ def predict(frame):
     tensor = transform(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     tensor = tensor.unsqueeze(0)
     with torch.no_grad():
-        predicted = model(tensor).squeeze(-1)
+        predicted = model(tensor).squeeze()
         prob = torch.sigmoid(predicted).item()
     label = "person" if prob > 0.5 else "no person"
     return label, prob
