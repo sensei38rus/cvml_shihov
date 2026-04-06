@@ -47,7 +47,7 @@ print(model)
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.Adam(
     filter(lambda p: p.requires_grad, model.parameters()),
-    lr=0.0001
+    lr=0.001
 )
 
 # Трансформации для EfficientNet-B0 (нужен размер 224x224)
