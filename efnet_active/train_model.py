@@ -37,7 +37,7 @@ def build_model(model_path=None):
 
 criterion = nn.BCEWithLogitsLoss()
 
-# Трансформации для EfficientNet-B0
+
 transform = transforms.Compose([
     transforms.ToPILImage(),
     transforms.Resize((224, 224)),
@@ -87,7 +87,6 @@ class Buffer():
         labels = torch.tensor(list(self.labels), dtype=torch.float32)
         return images, labels
 
-# Этот блок выполняется ТОЛЬКО при прямом запуске train_model.py
 if __name__ == "__main__":
     model = build_model()
     

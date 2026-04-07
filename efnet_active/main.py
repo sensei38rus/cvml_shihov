@@ -11,7 +11,7 @@ if __name__ == '__main__':
         print("Model doesn't exist. Please run train_model.py first to train the model.")
         exit(1)
     
-    # Загружаем модель
+ 
     model = build_model()
     model.load_state_dict(torch.load(model_path, map_location='cpu'))
     model.eval()
@@ -40,7 +40,7 @@ if __name__ == '__main__':
             curr_label, curr_conf = predict(model, frame)
             print(f"Предсказание: {curr_label} (уверенность: {curr_conf:.3f})")
         
-        # Отображаем результат на кадре
+       
         if curr_label:
             cv2.putText(frame_copy, f"{curr_label} {curr_conf:.2f}",
                 (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
