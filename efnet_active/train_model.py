@@ -13,33 +13,22 @@ save_path = Path(__file__).parent
 model_path = save_path/"model.pth"
 
 def build_model(model_path=None):
-    # Загружаем предобученную EfficientNet-B0
+  
     weights = torchvision.models.EfficientNet_B0_Weights.IMAGENET1K_V1
     model = torchvision.models.efficientnet_b0(weights=weights)
     
-    # Замораживаем все слои
-    for param in model.parameters():
+    for param in model.features.parameters():
         param.requires_grad = False
     
-    # Получаем количество входных признаков для классификатора
     in_features = model.classifier[1].in_features
-    
-    # Заменяем последний слой на бинарную классификацию
+
     model.classifier = nn.Sequential(
         nn.Linear(in_features, 128),
         nn.ReLU(),
         nn.Linear(128, 1)
     )
     
-    # Замораживаем features (уже заморожены, но для ясности)
-    for param in model.features.parameters():
-        param.requires_grad = False
     
-    # Размораживаем новый классификатор
-    for param in model.classifier.parameters():
-        param.requires_grad = True
-    
-    # Загружаем веса если указан путь
     if model_path and Path(model_path).exists():
         model.load_state_dict(torch.load(model_path))
         print("Модель загружена из сохраненного файла")
