@@ -113,6 +113,8 @@ def train_model(model, dataset, epochs = 5):
     model.train()
     for epoch in range(epochs):
         running_loss = 0.0
+        correct = 0
+        total = 0
         for inputs,labels in loader:
             optimizer.zero_grad() # обнуляем градиенты
             preds = model(inputs)
@@ -120,7 +122,14 @@ def train_model(model, dataset, epochs = 5):
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
-        print(f"Эпоха {epoch+1}/{epochs}, Потеря: {running_loss/len(loader):.4f}")
+
+            _, predicted = torch.max(preds, 1)  # Получаем предсказанные классы
+            total += labels.size(0)              # Общее количество样本
+            correct += (predicted == labels).sum().item()
+        
+        epoch_loss = running_loss / len(loader)
+        epoch_acc = 100 * correct / total
+        print(f"Эпоха {epoch+1}/{epochs}, Потеря: {epoch_loss:.4f}, Точность: {epoch_acc:.2f}%")
     print("Обучение завершено!")
 
 drawing = False
