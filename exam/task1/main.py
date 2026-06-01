@@ -15,7 +15,8 @@ warnings.filterwarnings("ignore")
 
 save_path = Path(__file__).parent
 MODEL_PATH = save_path/"model.pth"
-CLASSES = ['Circle', 'Square', 'Triangle']
+
+CLASSES = ['Circle', 'Square', 'Triangle', 'None']
 IMG_SIZE = 64
 
 class ShapeDataset(Dataset):
@@ -24,17 +25,14 @@ class ShapeDataset(Dataset):
         self.num_samples = num_samples
         self.img_size = img_size
 
-        # массив изображений 
         self.X = np.zeros((num_samples, 1, img_size, img_size), dtype = np.float32)
-        # массив меток - 0 круг, 1 - квадрат, 2 - треугольник
         self.y = np.zeros(num_samples, dtype = np.int64)
 
         for i in range(num_samples):
-            shape_type = random.randint(0,2) 
+            # Теперь генерируем случайное число от 0 до 3 (4 класса)
+            shape_type = random.randint(0, 3) 
             self.y[i] = shape_type
-            # пустой массив для холста
             img = np.zeros((img_size, img_size), dtype=np.float32)
-            # размер фигуры
             size = random.randint(10,25)
             center_x = random.randint(size + 5, img_size - size - 5)
             center_y = random.randint(size + 5, img_size - size - 5)
@@ -44,21 +42,31 @@ class ShapeDataset(Dataset):
                 img[rr,cc] = 1.0
             
             elif shape_type == 1: # квадрат
-                #4 угла для квадрата
                 r = [center_y - size, center_y - size, center_y + size, center_y + size]
                 c = [center_x - size, center_x + size, center_x + size, center_x - size]
                 rr, cc = draw.polygon(r,c,shape=img.shape)
                 img[rr,cc] = 1.0
             
-            elif shape_type == 2: 
+            elif shape_type == 2: # треугольник
                 r = [center_y-size, center_y + size, center_y + size]
                 c = [center_x, center_x - size, center_x + size]
                 rr, cc = draw.polygon(r,c,shape=img.shape)
                 img[rr,cc] = 1.0
+                
+            elif shape_type == 3: # None (случайные каракули/линии)
+                # Рисуем от 1 до 4 случайных пересекающихся линий, чтобы имитировать "не фигуру"
+                for _ in range(random.randint(1, 4)):
+                    r0 = random.randint(5, img_size - 5)
+                    c0 = random.randint(5, img_size - 5)
+                    r1 = random.randint(5, img_size - 5)
+                    c1 = random.randint(5, img_size - 5)
+                    rr, cc = draw.line(r0, c0, r1, c1)
+                    # Используем валидные координаты для отрисовки линии
+                    valid = (rr >= 0) & (rr < img_size) & (cc >= 0) & (cc < img_size)
+                    img[rr[valid], cc[valid]] = 1.0
 
             # шум
             noise = np.random.normal(0,0.05, img.shape)
-            # обрезаем в допустимом диапозоне
             img = np.clip(img+noise, 0, 1) 
             self.X[i, 0] = img
 
@@ -86,7 +94,8 @@ class ShapeClassifier(nn.Module):
         self.flatten = nn.Flatten()
         self.fc1 = nn.Linear(32 * 16 * 16, 128)
         self.relu3 = nn.ReLU()
-        self.fc2 = nn.Linear(128,3)
+        # Изменено количество выходных нейронов с 3 на 4
+        self.fc2 = nn.Linear(128, 4)
 
     def forward(self,x):
         x = self.conv1(x)
@@ -116,15 +125,15 @@ def train_model(model, dataset, epochs = 5):
         correct = 0
         total = 0
         for inputs,labels in loader:
-            optimizer.zero_grad() # обнуляем градиенты
+            optimizer.zero_grad() 
             preds = model(inputs)
             loss = criterion(preds,labels)
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
 
-            _, predicted = torch.max(preds, 1)  # Получаем предсказанные классы
-            total += labels.size(0)              # Общее количество样本
+            _, predicted = torch.max(preds, 1) 
+            total += labels.size(0)            
             correct += (predicted == labels).sum().item()
         
         epoch_loss = running_loss / len(loader)
@@ -187,9 +196,12 @@ def run(model):
 
                     class_name = CLASSES[predicted.item()]
                     confidence = prob.item() * 100
+                    
+                    # Можно изменить цвет текста для "None", чтобы было нагляднее
+                    color = (0, 165, 255) if class_name == 'None' else (0, 255, 0)
                     text = f"{class_name}: {confidence:.1f}%"
                     cv2.putText(display_img, text, (x, max(20, y - 10)), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
         cv2.imshow('Shape Classifier', display_img)
         
         key = cv2.waitKey(1) & 0xFF
@@ -203,12 +215,17 @@ def run(model):
 if __name__ == '__main__':
     model = ShapeClassifier()
     if os.path.exists(MODEL_PATH):
-        print(f"Найдены сохраненные веса '{MODEL_PATH}'. Загрузка модели...")
-        model.load_state_dict(torch.load(MODEL_PATH))
-        print("Модель успешно загружена и готова к работе!")
+        try:
+            model.load_state_dict(torch.load(MODEL_PATH))
+            print(f"Найдены сохраненные веса '{MODEL_PATH}'. Модель успешно загружена!")
+        except Exception as e:
+            print(f"\n[ОШИБКА] Не удалось загрузить веса: {e}")
+            print("Скорее всего, старая модель была обучена на 3 класса. Удалите файл 'model.pth' и перезапустите скрипт для переобучения на 4 класса.")
+            exit(1)
     else:
-        train_dataset = ShapeDataset(num_samples=3000, img_size=IMG_SIZE)
-        train_model(model, train_dataset, epochs=4)
+        # Для лучшего распознавания 4 классов можно слегка увеличить выборку
+        train_dataset = ShapeDataset(num_samples=4000, img_size=IMG_SIZE)
+        train_model(model, train_dataset, epochs=10)
         torch.save(model.state_dict(), MODEL_PATH)
         print(f"Веса модели успешно сохранены в файл: {MODEL_PATH}")
     run(model)

@@ -10,9 +10,7 @@ from skimage.draw import disk, circle_perimeter, rectangle, rectangle_perimeter,
 from pathlib import Path
 
 path = Path(__file__).parent
-# ==========================================
-# 1. Генерация датасета (skimage.draw + PyTorch Dataset)
-# ==========================================
+
 class ShapeDataset(Dataset):
     def __init__(self, num_samples, img_size=128):
         self.num_samples = num_samples
@@ -63,9 +61,7 @@ class ShapeDataset(Dataset):
         # Возвращаем тензоры формата [Channels, Height, Width]
         return torch.tensor(img).unsqueeze(0), torch.tensor(mask).unsqueeze(0)
 
-# ==========================================
-# 2. Архитектура модели (Упрощенная сегментационная CNN)
-# ==========================================
+
 class BoundaryNet(nn.Module):
     def __init__(self):
         super(BoundaryNet, self).__init__()
@@ -89,12 +85,6 @@ class BoundaryNet(nn.Module):
         x = self.out(x)
         return x
 
-# ==========================================
-# 3. Логика обучения и сохранения
-# ==========================================
-# ==========================================
-# 3. Логика обучения и сохранения
-# ==========================================
 def train_or_load_model(model_path=path/"model.pth", img_size=128):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = BoundaryNet().to(device)
@@ -152,9 +142,6 @@ def train_or_load_model(model_path=path/"model.pth", img_size=128):
     model.eval()
     return model, device
 
-# ==========================================
-# 4. Интерфейс рисования (OpenCV)
-# ==========================================
 drawing = False
 erasing = False
 brush_size = 4
