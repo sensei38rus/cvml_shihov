@@ -9,18 +9,17 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms
 from PIL import Image
 from pathlib import Path
-path = Path(__file__).parent
-# --- 1. Настройка параметров ---
-CSV_PATH = path/'chinese/chinese_mnist.csv'
-IMG_DIR = path/'chinese/data/data'
-MODEL_PATH = path/'model.pth'
-BATCH_SIZE = 64
-EPOCHS = 30
-VAL_SPLIT = 0.2
-PATIENCE = 7
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# --- 2. Кастомный Dataset ---
+path = Path(__file__).parent
+csv_path = path/'chinese/chinese_mnist.csv'
+img_dir = path/'chinese/data/data'
+model_path = path/'model.pth'
+batch_size = 64
+epochs = 30
+patience = 7
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
 class ChineseMNISTDataset(Dataset):
     def __init__(self, csv_file, img_dir, transform=None):
         self.data_frame = pd.read_csv(csv_file)
@@ -53,11 +52,11 @@ class ChineseMNISTDataset(Dataset):
 
         return image, label
 
-# --- 3. Архитектура Нейросети ---
-class CNN(nn.Module):
+
+class ChineseCNN(nn.Module):
     def __init__(self, num_classes=15):
-        super(CNN, self).__init__()
-        # Блок 1: 1 -> 32, 64x64 -> 32x32
+        super(ChineseCNN, self).__init__()
+       
         self.block1 = nn.Sequential(
             nn.Conv2d(1, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
@@ -68,7 +67,7 @@ class CNN(nn.Module):
             nn.MaxPool2d(2, 2),
             nn.Dropout2d(0.25)
         )
-        # Блок 2: 32 -> 64, 32x32 -> 16x16
+       
         self.block2 = nn.Sequential(
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
             nn.BatchNorm2d(64),
@@ -79,7 +78,7 @@ class CNN(nn.Module):
             nn.MaxPool2d(2, 2),
             nn.Dropout2d(0.25)
         )
-        # Блок 3: 64 -> 128, 16x16 -> 8x8
+        
         self.block3 = nn.Sequential(
             nn.Conv2d(64, 128, kernel_size=3, padding=1),
             nn.BatchNorm2d(128),
@@ -87,8 +86,10 @@ class CNN(nn.Module):
             nn.MaxPool2d(2, 2),
             nn.Dropout2d(0.25)
         )
-        # Классификатор
+        
+       
         self.classifier = nn.Sequential(
+            nn.Flatten(),
             nn.Linear(128 * 8 * 8, 256),
             nn.ReLU(),
             nn.Dropout(0.5),
@@ -99,11 +100,10 @@ class CNN(nn.Module):
         x = self.block1(x)
         x = self.block2(x)
         x = self.block3(x)
-        x = x.view(x.size(0), -1)
         x = self.classifier(x)
         return x
 
-# --- 4. Функция обучения одной эпохи ---
+
 def run_epoch(model, dataloader, criterion, optimizer, training):
     model.train() if training else model.eval()
     total_loss = 0.0
@@ -112,7 +112,7 @@ def run_epoch(model, dataloader, criterion, optimizer, training):
 
     with torch.set_grad_enabled(training):
         for inputs, labels in dataloader:
-            inputs, labels = inputs.to(DEVICE), labels.to(DEVICE)
+            inputs, labels = inputs.to(device), labels.to(device)
 
             if training:
                 optimizer.zero_grad()
@@ -133,18 +133,18 @@ def run_epoch(model, dataloader, criterion, optimizer, training):
     accuracy = correct / total
     return avg_loss, accuracy
 
-# --- 5. Функция обучения с early stopping ---
+
 def train_model(model, train_loader, val_loader, criterion, optimizer):
     best_val_loss = float('inf')
     best_weights = None
     patience_counter = 0
 
-    for epoch in range(EPOCHS):
+    for epoch in range(epochs):
         train_loss, train_acc = run_epoch(model, train_loader, criterion, optimizer, training=True)
         val_loss, val_acc = run_epoch(model, val_loader, criterion, optimizer, training=False)
 
         print(
-            f"Эпоха [{epoch + 1:02d}/{EPOCHS}] | "
+            f"Эпоха [{epoch + 1:02d}/{epochs}] | "
             f"Train Loss: {train_loss:.4f}  Train Acc: {train_acc * 100:.2f}% | "
             f"Val Loss: {val_loss:.4f}  Val Acc: {val_acc * 100:.2f}%"
         )
@@ -155,16 +155,16 @@ def train_model(model, train_loader, val_loader, criterion, optimizer):
             patience_counter = 0
         else:
             patience_counter += 1
-            if patience_counter >= PATIENCE:
+            if patience_counter >= patience:
                 print(f"Early stopping сработал на эпохе {epoch + 1}.")
                 break
 
     model.load_state_dict(best_weights)
-    torch.save(model.state_dict(), MODEL_PATH)
-    print(f"Лучшая модель сохранена в {MODEL_PATH}")
+    torch.save(model.state_dict(), model_path)
+    print(f"Лучшая модель сохранена в {model_path}")
 
-# --- 6. Интерактивная рисовалка на OpenCV ---
-def draw_and_predict(model, transform, class_mapping):
+
+def draw(model, transform, class_mapping):
     model.eval()
     canvas_size = 400
     canvas = np.zeros((canvas_size, canvas_size), dtype=np.uint8)
@@ -185,8 +185,6 @@ def draw_and_predict(model, transform, class_mapping):
     cv2.namedWindow('Draw Character')
     cv2.setMouseCallback('Draw Character', draw)
 
-    print("\n--- ИНСТРУКЦИЯ ---")
-    print("Рисуйте иероглиф в открывшемся окне мышкой.")
     print("Нажмите 'Space' (Пробел) для распознавания.")
     print("Нажмите 'c' для очистки холста.")
     print("Нажмите 'q' или 'Esc' для выхода.")
@@ -200,7 +198,7 @@ def draw_and_predict(model, transform, class_mapping):
         elif key == ord(' '):
             img_resized = cv2.resize(canvas, (64, 64))
             img_pil = Image.fromarray(img_resized)
-            img_tensor = transform(img_pil).unsqueeze(0).to(DEVICE)
+            img_tensor = transform(img_pil).unsqueeze(0).to(device)
 
             with torch.no_grad():
                 output = model(img_tensor)
@@ -217,7 +215,7 @@ def draw_and_predict(model, transform, class_mapping):
 
 # --- Главная логика ---
 if __name__ == '__main__':
-    print(f"Используемое устройство: {DEVICE}")
+    print(f"Используемое устройство: {device}")
 
     train_transform = transforms.Compose([
         transforms.Resize((64, 64)),
@@ -233,26 +231,26 @@ if __name__ == '__main__':
         transforms.Normalize((0.5,), (0.5,))
     ])
 
-    full_dataset = ChineseMNISTDataset(csv_file=CSV_PATH, img_dir=IMG_DIR, transform=train_transform)
+    full_dataset = ChineseMNISTDataset(csv_file=csv_path, img_dir=img_dir, transform=train_transform)
     num_classes = len(full_dataset.classes)
 
-    val_size = int(len(full_dataset) * VAL_SPLIT)
+    val_size = int(len(full_dataset) * 0.2)
     train_size = len(full_dataset) - val_size
     train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
-    val_dataset.dataset = ChineseMNISTDataset(csv_file=CSV_PATH, img_dir=IMG_DIR, transform=val_transform)
+    val_dataset.dataset = ChineseMNISTDataset(csv_file=csv_path, img_dir=img_dir, transform=val_transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=2, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=2, pin_memory=True)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=2, pin_memory=True)
 
-    model = CNN(num_classes=num_classes).to(DEVICE)
+    model = ChineseCNN(num_classes=num_classes).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
 
-    if os.path.exists(MODEL_PATH):
-        print(f"Найдена сохраненная модель '{MODEL_PATH}'. Загрузка весов...")
-        model.load_state_dict(torch.load(MODEL_PATH, map_location=DEVICE))
+    if os.path.exists(model_path):
+        print(f"Найдена сохраненная модель '{model_path}'. Загрузка весов...")
+        model.load_state_dict(torch.load(model_path, map_location=device))
     else:
         print("Сохраненная модель не найдена. Начинаем обучение...")
         train_model(model, train_loader, val_loader, criterion, optimizer)
 
-    draw_and_predict(model, val_transform, full_dataset.class_to_idx)
+    draw(model, val_transform, full_dataset.class_to_idx)
