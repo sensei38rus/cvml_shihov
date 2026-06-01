@@ -13,11 +13,11 @@ path = Path(__file__).parent
 # --- 1. Настройка параметров ---
 CSV_PATH = path/'chinese/chinese_mnist.csv'
 IMG_DIR = path/'chinese/data/data'
-MODEL_PATH = path/'chinese_mnist_model.pth'
+MODEL_PATH = path/'model.pth'
 BATCH_SIZE = 64
 EPOCHS = 30
 VAL_SPLIT = 0.2
-PATIENCE = 5
+PATIENCE = 7
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # --- 2. Кастомный Dataset ---
@@ -174,13 +174,13 @@ def draw_and_predict(model, transform, class_mapping):
         nonlocal drawing
         if event == cv2.EVENT_LBUTTONDOWN:
             drawing = True
-            cv2.circle(canvas, (x, y), 10, (255), -1)
+            cv2.circle(canvas, (x, y), 5, (255), -1)
         elif event == cv2.EVENT_MOUSEMOVE:
             if drawing:
-                cv2.circle(canvas, (x, y), 10, (255), -1)
+                cv2.circle(canvas, (x, y), 5, (255), -1)
         elif event == cv2.EVENT_LBUTTONUP:
             drawing = False
-            cv2.circle(canvas, (x, y), 10, (255), -1)
+            cv2.circle(canvas, (x, y), 5, (255), -1)
 
     cv2.namedWindow('Draw Character')
     cv2.setMouseCallback('Draw Character', draw)
